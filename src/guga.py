@@ -43,7 +43,7 @@ def search_aur(query):
     except Exception as e:
         print_status(f"Failed to fetch search results: {e}", "31")
 
-def install_package(pkg_name):
+def install_package(pkg_name, skip_pgp=False):
     check_dependencies()
     BUILD_DIR.mkdir(parents=True, exist_ok=True)
     pkg_dir = BUILD_DIR / pkg_name
@@ -61,7 +61,12 @@ def install_package(pkg_name):
 
     print_status(f"Building and installing '{pkg_name}' via makepkg...")
     os.chdir(pkg_dir)
-    makepkg_res = subprocess.run(["makepkg", "-si"])
+    
+    makepkg_args = ["makepkg", "-si"]
+    if skip_pgp:
+        makepkg_args.append("--skippgpcheck")
+
+    makepkg_res = subprocess.run(makepkg_args)
 
     if makepkg_res.returncode == 0:
         print_status(f"Successfully installed '{pkg_name}'!", "32")
@@ -72,9 +77,9 @@ def show_help():
     print("""\033[1mguga\033[0m - Lightweight Python AUR Helper
 
 Usage:
-  guga -S <pkgname>     Install an AUR package
-  guga -Ss <query>     Search for an AUR package
-  guga -h              Show this help menu
+  guga -S [--skippgpcheck] <pkgname>   Install an AUR package
+  guga -Ss <query>                    Search for an AUR package
+  guga -h                             Show this help menu
 """)
 
 def main():
@@ -82,11 +87,20 @@ def main():
         show_help()
         sys.exit(0)
 
-    flag = sys.argv[1]
+    args = sys.argv[1:]
+    flag = args[0]
 
-    if flag == "-S" and len(sys.argv) >= 3:
-        for pkg in sys.argv[2:]:
-            install_package(pkg)
+    if flag == "-S":
+        skip_pgp = "--skippgpcheck" in args or "--skip-pgp-check" in args
+        packages = [arg for arg in args[1:] if not arg.startswith("-")]
+        
+        if not packages:
+            print_status("No packages specified.", "31")
+            sys.exit(1)
+            
+        for pkg in packages:
+            install_package(pkg, skip_pgp=skip_pgp)
+            
     elif flag == "-Ss" and len(sys.argv) >= 3:
         search_aur(sys.argv[2])
     elif flag in ["-h", "--help"]:
